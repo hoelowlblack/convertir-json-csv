@@ -3,65 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON to CSV Converter</title>
+    <title>ZIP to CSV Converter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
 </head>
 <body>
 
-    <h1>Convertir JSON en CSV</h1>
+    <h1>Convertir ZIP (user.ld) en CSV</h1>
     
-    <!-- Input pour charger un fichier -->
-    <input type="file" id="jsonFileInput" accept=".json">
-    <button onclick="convertJsonToCsv()">Convertir et Télécharger CSV</button>
+    <!-- Input pour charger un fichier ZIP -->
+    <input type="file" id="zipFileInput" accept=".zip">
+    <button onclick="convertZipToCsv()">Convertir et Télécharger CSV</button>
 
     <script>
-        // Fonction pour convertir le JSON en CSV
-        function convertJsonToCsv() {
-            const input = document.getElementById('jsonFileInput').files[0];
+        // Fonction pour convertir le fichier ZIP en CSV
+        function convertZipToCsv() {
+            const input = document.getElementById('zipFileInput').files[0];
             
             if (!input) {
-                alert("Veuillez joindre un fichier JSON.");
+                alert("Veuillez joindre un fichier ZIP.");
                 return;
             }
 
             const reader = new FileReader();
 
             reader.onload = function(event) {
-                const jsonData = event.target.result;
-                const lines = jsonData.split('\n');
-                let csvContent = "ID,user_login,user_email,user_registered,ip,first_name,last_name\n";
-
-                lines.forEach(line => {
-                    if (line.trim()) {
-                        const entry = JSON.parse(line);
-                        const wp_user = entry.wp_user || {};
-                        const wp_user_meta = entry.wp_user_meta || {};
-
-                        const ID = wp_user.ID || '';
-                        const user_login = wp_user.user_login || '';
-                        const user_email = wp_user.user_email || '';
-                        const user_registered = wp_user.user_registered || '';
-                        
-                        const first_name = (wp_user_meta.first_name || [''])[0];
-                        const last_name = (wp_user_meta.last_name || [''])[0];
-                        
-                        let ip = '';
-                        const session_tokens = wp_user_meta.session_tokens || [];
-                        if (session_tokens.length > 0) {
-                            const first_token = Object.values(session_tokens[0])[0];
-                            ip = first_token.ip || '';
+                const zip = new JSZip();
+                zip.loadAsync(event.target.result)
+                    .then(function(zipContent) {
+                        // Trouver le fichier "user.ld" dans le ZIP
+                        if (zipContent.files['user.ld']) {
+                            return zipContent.files['user.ld'].async('string');
+                        } else {
+                            alert("Le fichier 'user.ld' est introuvable dans le fichier ZIP.");
+                            throw new Error("user.ld non trouvé");
                         }
+                    })
+                    .then(function(ldContent) {
+                        // Conversion du fichier 'user.ld' en JSON, puis en CSV
+                        const lines = ldContent.split('\n');
+                        let csvContent = "ID,user_login,user_email,user_registered,ip,first_name,last_name\n";
 
-                        // Ajouter les informations dans le contenu CSV
-                        csvContent += `${ID},${user_login},${user_email},${user_registered},${ip},${first_name},${last_name}\n`;
-                    }
-                });
+                        lines.forEach(line => {
+                            if (line.trim()) {
+                                const entry = JSON.parse(line);
+                                const wp_user = entry.wp_user || {};
+                                const wp_user_meta = entry.wp_user_meta || {};
 
-                // Télécharger le fichier CSV
-                downloadCsv(csvContent);
+                                const ID = wp_user.ID || '';
+                                const user_login = wp_user.user_login || '';
+                                const user_email = wp_user.user_email || '';
+                                const user_registered = wp_user.user_registered || '';
+
+                                const first_name = (wp_user_meta.first_name || [''])[0];
+                                const last_name = (wp_user_meta.last_name || [''])[0];
+
+                                let ip = '';
+                                const session_tokens = wp_user_meta.session_tokens || [];
+                                if (session_tokens.length > 0) {
+                                    const first_token = Object.values(session_tokens[0])[0];
+                                    ip = first_token.ip || '';
+                                }
+
+                                // Ajouter les informations dans le contenu CSV
+                                csvContent += `${ID},${user_login},${user_email},${user_registered},${ip},${first_name},${last_name}\n`;
+                            }
+                        });
+
+                        // Télécharger le fichier CSV
+                        downloadCsv(csvContent);
+                    })
+                    .catch(function(error) {
+                        console.error("Erreur lors de l'extraction ou de la conversion : ", error);
+                    });
             };
 
-            // Lire le fichier JSON en tant que texte
-            reader.readAsText(input);
+            // Lire le fichier ZIP en tant que binaire
+            reader.readAsArrayBuffer(input);
         }
 
         // Fonction pour télécharger le fichier CSV
